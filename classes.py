@@ -9,10 +9,59 @@ height = 700
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("blue")
 
-
 database = sqlite3.connect("JWdatabase.db")
 dbcursor = database.cursor()
 
+class Products(customtkinter.CTkToplevel):
+    # def __init__(self, parent, productNumber, productName, productDescription, units, location, costPrice, salePrice):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.geometry("300x375")
+        self.title("Products Entry")
+
+        self.productNumberEntry = customtkinter.CTkEntry(self, placeholder_text="Enter product number", width=200)
+        self.productNameEntry = customtkinter.CTkEntry(master=self, placeholder_text="Enter product name", width=200)
+        self.productDescriptionEntry = customtkinter.CTkEntry(master=self, placeholder_text="Enter a description", width=200)
+        self.unitsEntry = customtkinter.CTkEntry(master=self, placeholder_text="Quantity of this unit", width=200)
+        self.locationEntry = customtkinter.CTkEntry(master=self, placeholder_text="Location kept", width=200)
+        self.costPriceEntry = customtkinter.CTkEntry(master=self, placeholder_text="Cost price", width=200)
+        self.salePriceEntry = customtkinter.CTkEntry(master=self, placeholder_text="Sale price", width=200)
+        self.postProductButton = customtkinter.CTkButton(self, text="Post product", width=200, command=self.validate)
+        self.lblMessage = customtkinter.CTkLabel(self, width=200, text="", text_color="red")
+        
+        self.productNumberEntry.place(x=50, y=30)
+        self.productNameEntry.place(x=50, y=65)
+        self.productDescriptionEntry.place(x=50, y=100)
+        self.unitsEntry.place(x=50, y=135)    
+        self.locationEntry.place(x=50, y=170)
+        self.costPriceEntry.place(x=50, y=205)
+        self.salePriceEntry.place(x=50, y=240)
+        self.postProductButton.place(x=50, y=275)
+        self.lblMessage.place(x=50, y=345)
+
+    def validate(self):
+        self.productNumber = self.productNumberEntry.get()
+        self.productName = self.productNameEntry.get()
+        self.productDescription	= self.productDescriptionEntry.get()
+        self.units = self.unitsEntry.get()
+        self.location = self.locationEntry.get()
+        self.costPrice = self.costPriceEntry.get()
+        self.salePrice = self.salePriceEntry.get()     
+
+        if(self.productNumber and self.productName and self.productDescription and self.units 
+           and self.location and self.costPrice and self.salePrice): 
+            self.record = (self.productNumber, self.productName, self.productDescription, self.units, self.location, self.costPrice, self.salePrice)       
+            database = sqlite3.connect("JWdatabase.db")
+            dbcursor = database.cursor()
+            try:
+                dbcursor.execute("""INSERT INTO products 
+                (productNumber, productName, productDescription, units, location, costPrice, salePrice) 
+                VALUES (?,?,?,?,?,?,?)""",  self.record)
+                database.commit()
+            except:
+                self.lblMessage.configure(text="Error posting into database")
+        else:
+            self.lblMessage.configure(text="All fields must be entered")
 
 
 class AdminWindow(customtkinter.CTkToplevel):
@@ -106,8 +155,6 @@ class AdminWindow(customtkinter.CTkToplevel):
             self.lblMessage.configure(text="Enter firstname and lastname OR username")
 
 
-
-
 class LogInWindow(customtkinter.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -130,10 +177,8 @@ class LogInWindow(customtkinter.CTkToplevel):
         self.loginFacebookButton.place(x=50, y=290)
 
     def validate(self):
-        # global usernameEntry, passwordEntry, credentialsDialog
         self.username = self.usernameEntry.get()
         self.password = self.passwordEntry.get()
-        # if(usernameEntry and passwordEntry):
         if(self.username and self.password):
             self.password = hashlib.sha256(self.password.encode()).hexdigest()
             self.record = (self.username, self.password)
@@ -163,13 +208,18 @@ class MenuBar:
         self.menubar = tkinter.Menu(self.parent)
         parent.config(menu=self.menubar)
         self.optionsMenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.optionsMenu.add_command(label="Log In", command= lambda : self.logIn(self.parent))
-        self.optionsMenu.add_command(label="Inventory", command=self.inventoryReport)
-        self.optionsMenu.add_command(label="User Administration", command=lambda : self.userAdministration(self.parent))
-        self.menubar.add_cascade(label="Options", menu=self.optionsMenu)
+        self.menubar.add_cascade(label="Options", font=("",13),  menu=self.optionsMenu)
+        self.optionsMenu.add_command(label="Log In", font=("",13), command= lambda : self.logIn(self.parent))
+        self.optionsMenu.add_command(label="Input Products", font=("",13), command= lambda : self.inputProducts(self.parent))
+        self.optionsMenu.add_command(label="Inventory", font=("",13), command=self.inventoryReport)
+        self.optionsMenu.add_command(label="User Administration", font=("",13), command=lambda : self.userAdministration(self.parent))
+
 
     def logIn(self, parent):
         self.login = LogInWindow(parent) 
+
+    def inputProducts(self, parent):
+        self.login = Products(parent) 
 
     def inventoryReport(self):
         print("implement Inventory report")

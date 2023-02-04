@@ -27,14 +27,11 @@ class MainWindow(customtkinter.CTk):
         
         menu_bar = MenuBar(self)
 
-
     def __del__(self):
         database.commit()
         dbcursor.close()
         database.close()
     
-
-
 if __name__ == "__main__":
     main_window = MainWindow()
 

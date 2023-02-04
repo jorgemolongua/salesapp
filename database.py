@@ -14,6 +14,27 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """ )
 
+dbcursor.execute("""CREATE TABLE IF NOT EXISTS products (
+	productNumber TEXT PRIMARY KEY,
+	productName TEXT,
+	productDescription TEXT,
+	units INTEGER,
+	location TEXT,
+	costPrice REAL,
+    salePrice REAL
+)
+""")
+
+dbcursor.execute("""CREATE TABLE IF NOT EXISTS sales (
+    saleNumber INTEGER PRIMARY KEY AUTOINCREMENT,
+	productNumber TEXT NOT NULL,
+	units INTEGER,
+	salePrice REAL,
+	date TEXT,
+    user TEXT
+)
+""")
+
 database.commit()
 database.close()
 
