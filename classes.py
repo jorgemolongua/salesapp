@@ -2,9 +2,11 @@ import tkinter
 import customtkinter
 import hashlib
 import sqlite3
+from tkinter import ttk
 
 width = 1400
 height = 700
+currentUser = ""
 
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("blue")
@@ -12,8 +14,109 @@ customtkinter.set_default_color_theme("blue")
 database = sqlite3.connect("JWdatabase.db")
 dbcursor = database.cursor()
 
+class SellProducts:
+    def __init__(self, parent, cashier):
+        self.parent = parent
+        self.cashier = cashier
+        self.productNumberStringVar = customtkinter.StringVar(self.parent, value="Product #")
+        self.productDescriptionStringVar = customtkinter.StringVar(self.parent, value="Product Description")
+        self.quantityStringVar = customtkinter.StringVar(self.parent)
+        self.salePricerDoubleVar = customtkinter.DoubleVar(self.parent)
+        self.subTotalDoubleVar = customtkinter.DoubleVar(self.parent)
+        self.totalDoubleVar = customtkinter.DoubleVar(self.parent)
+        self.basket = []
+        
+        self.cashierUsernameLabel = customtkinter.CTkLabel(parent, text=f"Cashier: {self.cashier}")
+        self.productNumberEntry = customtkinter.CTkEntry(self.parent, placeholder_text="Product #", width=100, textvariable=self.productNumberStringVar)
+        self.productDescriptionEntry = customtkinter.CTkEntry(master=self.parent, placeholder_text="Product description", width=300, textvariable=self.productDescriptionStringVar)
+        self.quantity = customtkinter.CTkEntry(master=self.parent, placeholder_text="Quantity", textvariable=self.quantityStringVar, width=100)
+        self.salePriceEntry = customtkinter.CTkEntry(master=self.parent, placeholder_text="Unit price", textvariable=self.salePricerDoubleVar, state='normal', width=100)
+        self.subTotal = customtkinter.CTkEntry(master=self.parent, placeholder_text="sub Total", textvariable=self.subTotalDoubleVar, state='normal', width=100)
+        self.addButton = customtkinter.CTkButton(self.parent, text="Add to cart", command=self.addToCart)
+
+        self.productNumberEntry.bind('<Return>', self.productNumberSearch)
+        self.productDescriptionEntry.bind('<Return>', self.productDescriptionSearch)
+        self.quantity.bind('<Return>', self.processQuantityChange)
+                
+        self.cashierUsernameLabel.place(x=40, y=30)
+        self.productNumberEntry.place(x=40, y=100)
+        self.productDescriptionEntry.place(x=145, y=100)
+        self.quantity.place(x=450, y=100)
+        self.salePriceEntry.place(x=555, y=100)
+        self.subTotal.place(x=660, y=100)
+        self.addButton.place(x=765, y=100)
+
+    def addToCart(self, *args):    
+        self.basket.append([self.productDescriptionStringVar.get(), self.quantityStringVar.get(), self.salePricerDoubleVar.get(), self.subTotalDoubleVar.get()])
+        self.totalDoubleVar.set(self.totalDoubleVar.get() + self.subTotalDoubleVar.get())
+        print(self.basket, self.totalDoubleVar)
+        print(self.totalDoubleVar.get())
+
+    def processQuantityChange(self, *args):
+        self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get()))           
+    
+
+    def productDescriptionSearch(self, *args):
+        self.record = (self.productDescriptionStringVar.get(),)
+        print(self.record[0])
+        try:
+            dbcursor.execute(f"SELECT productNumber, productName, productDescription, salePrice FROM products WHERE productName like '%{self.record[0]}%' OR  productDescription like '%{self.record[0]}%'")
+            database.commit()
+            rows = dbcursor.fetchall()
+            if (rows):
+                columnNames = ("productNumber", "productDescription", "salePrice")
+                treeView = ttk.Treeview(self.parent, columns=columnNames)
+                myStyle=ttk.Style()
+                myStyle.configure(".", font=("Helvetica", 12))
+                myStyle.configure("Treeview", font=("Helvetica", 12))
+                myStyle.configure("Treeview.Heading", font=("Helvetica", 15), background="blue")
+
+                treeView.heading("#0", text="")
+                treeView.heading("productNumber", text="Product #", anchor="w")
+                treeView.heading("productDescription", text="Description", anchor="w")
+                treeView.heading("salePrice", text="Price", anchor="w")
+
+                for row in rows:
+                    treeView.insert(parent='', index=tkinter.END, values=(row[0], row[2], row[3]))
+                
+                # treeView.bind("<<TreeviewSelect>>", self.itemSelected)
+                treeView.bind("<<TreeviewSelect>>", lambda *args : self.selectedRow(treeView))
+
+                # treeView.pack()
+                treeView.place(x=40, y=170)
+        except Exception as e:
+            print("Error in fetching in the database: ", e)
+
+    def selectedRow(self, tree):
+        record = (tree.item(tree.selection()))['values']
+        self.productNumberStringVar.set(record[0])
+        self.productDescriptionStringVar.set(record[1])
+        self.quantityStringVar.set(1)
+        self.salePricerDoubleVar.set(record[2])
+        self.processQuantityChange()
+        # self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get())) 
+        tree.destroy()
+
+
+    def productNumberSearch(self, *args):
+        self.record = (self.productNumberStringVar.get(),)
+        try:
+            dbcursor.execute(f"SELECT productDescription, salePrice FROM products WHERE productNumber = ?", self.record)
+            database.commit()
+            row = dbcursor.fetchone()
+            if (row):
+                self.productDescriptionStringVar.set(row[0])    
+                self.quantity.focus()
+                self.quantityStringVar.set(1)
+                self.salePricerDoubleVar.set(row[1])
+                self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get()))
+        except Exception as e:
+            print("Error: ", e)     
+
+
+
+ 
 class Products(customtkinter.CTkToplevel):
-    # def __init__(self, parent, productNumber, productName, productDescription, units, location, costPrice, salePrice):
     def __init__(self, parent):
         super().__init__(parent)
         self.geometry("300x375")
@@ -51,8 +154,8 @@ class Products(customtkinter.CTkToplevel):
         if(self.productNumber and self.productName and self.productDescription and self.units 
            and self.location and self.costPrice and self.salePrice): 
             self.record = (self.productNumber, self.productName, self.productDescription, self.units, self.location, self.costPrice, self.salePrice)       
-            database = sqlite3.connect("JWdatabase.db")
-            dbcursor = database.cursor()
+            # database = sqlite3.connect("JWdatabase.db")
+            # dbcursor = database.cursor()
             try:
                 dbcursor.execute("""INSERT INTO products 
                 (productNumber, productName, productDescription, units, location, costPrice, salePrice) 
@@ -114,7 +217,7 @@ class AdminWindow(customtkinter.CTkToplevel):
                 self.usernameEntry.configure(placeholder_text="Enter Username")
                 self.password1Entry.configure(placeholder_text="Enter Password")
                 self.password2Entry.configure(placeholder_text="Confirm Password")
-                self.entryLevel.configure(placeholder_text="Level (1-user, 2-supvc, 3-admin)")
+                self.entryLevel.configure(placeholder_text="Level (1-user, 2-supvc, 3-admin)")       
                 self.lblMessage.configure(text="")
             else:
                 self.lblMessage.configure(text="The two passwords must be the same")
@@ -160,7 +263,8 @@ class LogInWindow(customtkinter.CTkToplevel):
         super().__init__(parent)
         self.geometry("300x375")
         self.title("Login")
-
+        self.parent = parent
+ 
         self.usernameEntry = customtkinter.CTkEntry(self, placeholder_text="Enter Username", width=200)
         self.passwordEntry = customtkinter.CTkEntry(master=self, placeholder_text="Enter Password",show="*", width=200)
         self.loginButton = customtkinter.CTkButton(self, text="Log In", width=200, command=self.validate)
@@ -180,19 +284,20 @@ class LogInWindow(customtkinter.CTkToplevel):
         self.username = self.usernameEntry.get()
         self.password = self.passwordEntry.get()
         if(self.username and self.password):
-            self.password = hashlib.sha256(self.password.encode()).hexdigest()
-            self.record = (self.username, self.password)
-            database = sqlite3.connect("JWdatabase.db")
-            dbcursor = database.cursor()
-            dbcursor.execute("SELECT * FROM users WHERE userName = ? AND password = ?", self.record)
-            database.commit()
-            if (dbcursor.fetchall()):
-                self.destroy()
-                print("Credentials are OK. Proceed")
-            else:
-                print("Wrong credentials or user does not exist")
+            try:
+                self.password = hashlib.sha256(self.password.encode()).hexdigest()
+                self.record = (self.username, self.password)
+                # database = sqlite3.connect("JWdatabase.db")
+                # dbcursor = database.cursor()
+                dbcursor.execute("SELECT * FROM users WHERE userName = ? AND password = ?", self.record)
+                database.commit()
+                if (dbcursor.fetchall()):
+                    self.destroy()
+                    sellproducts = SellProducts(self.parent, self.username)               
+            except:
+                    self.lblMessage.configure(text="Wrong credentials or user does not exist")
         else:
-            print("Both username and password fields must be entered")
+            self.lblMessage.configure(text="Both username and password fields must be entered")
 
     def logInGoogleUser(self):
         pass
@@ -216,7 +321,7 @@ class MenuBar:
 
 
     def logIn(self, parent):
-        self.login = LogInWindow(parent) 
+        self.login = LogInWindow(parent)   
 
     def inputProducts(self, parent):
         self.login = Products(parent) 

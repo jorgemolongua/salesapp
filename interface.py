@@ -2,18 +2,17 @@ import tkinter
 import customtkinter
 from classes import *
 
-width = 1400
+width = 1400  
 height = 700
 
-customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("blue")
-
+currentUser=""
 
 
 class MainWindow(customtkinter.CTk):
     def __init__(self):
         super().__init__()
-     
+    
         self.geometry(f"{width}x{height}")
         self.title("JWealth5")
            
