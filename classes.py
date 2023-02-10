@@ -3,6 +3,8 @@ import customtkinter
 import hashlib
 import sqlite3
 from tkinter import ttk
+from tabulate import tabulate
+import time
 
 width = 1400
 height = 700
@@ -25,6 +27,7 @@ class SellProducts:
         self.subTotalDoubleVar = customtkinter.DoubleVar(self.parent)
         self.totalDoubleVar = customtkinter.DoubleVar(self.parent)
         self.basket = []
+        self.lineLength = 1
         
         self.cashierUsernameLabel = customtkinter.CTkLabel(parent, text=f"Cashier: {self.cashier}")
         self.productNumberEntry = customtkinter.CTkEntry(self.parent, placeholder_text="Product #", width=100, textvariable=self.productNumberStringVar)
@@ -36,7 +39,7 @@ class SellProducts:
 
         self.productNumberEntry.bind('<Return>', self.productNumberSearch)
         self.productDescriptionEntry.bind('<Return>', self.productDescriptionSearch)
-        self.quantity.bind('<Return>', self.processQuantityChange)
+        self.quantity.bind('<Return>', self.processQuantityChange) 
                 
         self.cashierUsernameLabel.place(x=40, y=30)
         self.productNumberEntry.place(x=40, y=100)
@@ -46,11 +49,27 @@ class SellProducts:
         self.subTotal.place(x=660, y=100)
         self.addButton.place(x=765, y=100)
 
-    def addToCart(self, *args):    
+    def addToCart(self, *args):   
+        self.processQuantityChange()
         self.basket.append([self.productDescriptionStringVar.get(), self.quantityStringVar.get(), self.salePricerDoubleVar.get(), self.subTotalDoubleVar.get()])
         self.totalDoubleVar.set(self.totalDoubleVar.get() + self.subTotalDoubleVar.get())
-        print(self.basket, self.totalDoubleVar)
-        print(self.totalDoubleVar.get())
+
+        headerLine = tabulate(self.basket, headers=["Item Desc", "Qty", "Price", "Sub Total"])
+        lineLength = len(self.productDescriptionStringVar.get()) + len(self.quantityStringVar.get()) + len(str(self.salePricerDoubleVar.get())) + len(str(self.subTotalDoubleVar.get())) + 20
+        heightLength = len(self.basket) + 7
+        if(lineLength > self.lineLength):
+            self.lineLength = lineLength
+            customerReceipt = tkinter.Text(self.parent, width=self.lineLength, height=heightLength)
+        else:
+            customerReceipt = tkinter.Text(self.parent, width=self.lineLength)  
+        customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
+        customerReceipt.insert("end", f"{time.asctime(time.localtime(time.time()))}\n\n")
+        customerReceipt.insert("end", headerLine)
+        totalLine = self.lineLength - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
+        customerReceipt.insert("end", "\n\n")
+        customerReceipt.insert("end", f"TOTAL{' '*totalLine}{self.totalDoubleVar.get()}")
+        
+        customerReceipt.place(x=1150, y=100)
 
     def processQuantityChange(self, *args):
         self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get()))           
@@ -94,7 +113,6 @@ class SellProducts:
         self.quantityStringVar.set(1)
         self.salePricerDoubleVar.set(record[2])
         self.processQuantityChange()
-        # self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get())) 
         tree.destroy()
 
 
