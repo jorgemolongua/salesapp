@@ -5,6 +5,10 @@ import sqlite3
 from tkinter import ttk
 from tabulate import tabulate
 import time
+import os
+import tempfile
+import interface
+
 
 width = 1400
 height = 700
@@ -16,6 +20,30 @@ customtkinter.set_default_color_theme("blue")
 database = sqlite3.connect("JWdatabase.db")
 dbcursor = database.cursor()
 
+
+class SalesUpdate:
+    def __init__(self, parent, cashier, presentTime, saleRecord ):
+        self.parent = parent
+        self.cashier = cashier
+        self.presentTime = presentTime
+        self.saleRecord = saleRecord
+        
+        try:
+            for row in saleRecord:
+                #reduce sale quantity from products table
+                dbcursor.execute("UPDATE products SET units = units - ? WHERE productNumber=?", (row[2], row[0]))
+                database.commit()
+
+                #update sales table
+                dbcursor.execute("""INSERT INTO sales 
+                (productNumber, units, salePrice, date, user) 
+                VALUES (?,?,?,?,?)""", (row[0], row[2], row[3], self.presentTime, self.cashier))
+                database.commit()
+        except Exception as e:
+            print(f"Error: {e}")
+
+
+
 class SellProducts:
     def __init__(self, parent, cashier):
         self.parent = parent
@@ -26,9 +54,14 @@ class SellProducts:
         self.salePricerDoubleVar = customtkinter.DoubleVar(self.parent)
         self.subTotalDoubleVar = customtkinter.DoubleVar(self.parent)
         self.totalDoubleVar = customtkinter.DoubleVar(self.parent)
-        self.basket = []
-        self.lineLength = 1
-        
+        self.amountReceivedStringVar = customtkinter.StringVar(self.parent)
+        self.customerChangeStringVar = customtkinter.StringVar(self.parent)
+        self.presentTime = ""
+        self.basket, self.saleRecord = [], []
+        self.lineWidth = 60
+
+        self.customerReceipt = tkinter.Text(self.parent, width=self.lineWidth)
+
         self.cashierUsernameLabel = customtkinter.CTkLabel(parent, text=f"Cashier: {self.cashier}")
         self.productNumberEntry = customtkinter.CTkEntry(self.parent, placeholder_text="Product #", width=100, textvariable=self.productNumberStringVar)
         self.productDescriptionEntry = customtkinter.CTkEntry(master=self.parent, placeholder_text="Product description", width=300, textvariable=self.productDescriptionStringVar)
@@ -36,6 +69,7 @@ class SellProducts:
         self.salePriceEntry = customtkinter.CTkEntry(master=self.parent, placeholder_text="Unit price", textvariable=self.salePricerDoubleVar, state='normal', width=100)
         self.subTotal = customtkinter.CTkEntry(master=self.parent, placeholder_text="sub Total", textvariable=self.subTotalDoubleVar, state='normal', width=100)
         self.addButton = customtkinter.CTkButton(self.parent, text="Add to cart", command=self.addToCart)
+        self.payButton = customtkinter.CTkButton(self.parent, text="Checkout", fg_color="green", hover_color="#49be25", command=self.processPayment)
 
         self.productNumberEntry.bind('<Return>', self.productNumberSearch)
         self.productDescriptionEntry.bind('<Return>', self.productDescriptionSearch)
@@ -48,28 +82,109 @@ class SellProducts:
         self.salePriceEntry.place(x=555, y=100)
         self.subTotal.place(x=660, y=100)
         self.addButton.place(x=765, y=100)
+        self.payButton.place(x=765, y=140)
 
+    def completeSale(self):
+        #print file
+        tmpfile = tempfile.mktemp('.txt')
+        open(tmpfile, "w").write(self.customerReceipt.get("0.0", tkinter.END))
+        os.startfile(tmpfile, "print")
+
+        # #close change dialog box and receipt
+        self.checkoutDialog.destroy()
+        self.customerReceipt.destroy()
+
+        # Update sales database
+        updateSales = SalesUpdate(self.parent, self.cashier, self.presentTime, self.saleRecord)
+
+        # #clear search fields
+        SellProducts.__init__(self, self.parent, self.cashier)
+
+       
+
+    def giveChange(self, *args):
+        amountGiven = int(self.amountReceivedEntry.get().strip())
+        totalBill= self.totalDoubleVar.get() 
+        customerChange = amountGiven - totalBill        
+
+        #update customer receipt
+        tabulatedData = tabulate(self.basket, headers=["Item Desc", "Qty", "Price", "Sub Total"])
+        numberOfRows = len(self.basket) + 11
+        lineWidth = len(self.productDescriptionStringVar.get()) + len(self.quantityStringVar.get()) + len(str(self.salePricerDoubleVar.get())) + len(str(self.subTotalDoubleVar.get())) + 20
+        if(lineWidth > self.lineWidth):
+            self.lineWidth = lineWidth
+        self.customerReceipt.delete("1.0", tkinter.END)
+        self.customerReceipt.destroy()
+        self.customerReceipt = tkinter.Text(self.parent, width=self.lineWidth, height=numberOfRows)
+        self.customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
+        self.presentTime = time.asctime(time.localtime(time.time()))
+        self.customerReceipt.insert("end", f"{self.presentTime}\n\n")
+        self.customerReceipt.insert("end", tabulatedData)
+        totalLine = self.lineWidth - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
+        self.customerReceipt.insert("end", "\n\n")
+        self.customerReceipt.insert("end", f"TOTAL{' '*totalLine}{self.totalDoubleVar.get()}")        
+        self.customerReceipt.insert("end", "\n\n")
+        self.customerReceipt.insert("end", f"Cash{' '*totalLine}{amountGiven}\n") 
+        self.customerReceipt.insert("end", f"Change{' '*(totalLine-2)}{customerChange}") 
+        self.customerReceipt.place(x=1150, y=100)
+
+        self.customerChangeDisplay.configure(text=str(customerChange))
+
+
+
+     
+    def processPayment(self, *args): 
+        self.checkoutDialog = customtkinter.CTkToplevel()
+        self.checkoutDialog.title("Checkout")
+        checkoutDialogOffsetX, checkoutDialogOffsetY = self.parent.winfo_x(), self.parent.winfo_y()
+        padx=600
+        pady=0
+        self.giveChangeBooleanVar = customtkinter.BooleanVar(self.parent)
+        self.completeSaleBooleanVar = customtkinter.BooleanVar(self.parent)
+        self.giveChangeBooleanVar.set(False)
+        self.completeSaleBooleanVar.set(False)
+   
+        self.checkoutDialog.geometry(f"250x125+{checkoutDialogOffsetX + padx}+{checkoutDialogOffsetY + pady}")
+        self.amountReceivedLabel = customtkinter.CTkLabel(self.checkoutDialog, text="   Amount Paid: ")
+        self.amountReceivedEntry = customtkinter.CTkEntry(self.checkoutDialog)
+        self.totalBillLabel = customtkinter.CTkLabel(self.checkoutDialog, text="   Total Bill: ")
+        self.totalBillDisplay = customtkinter.CTkLabel(self.checkoutDialog, text=str(self.totalDoubleVar.get()))
+        self.customerChangelabel = customtkinter.CTkLabel(self.checkoutDialog, text="   Change: ")
+        self.customerChangeDisplay = customtkinter.CTkLabel(self.checkoutDialog, text="0.0")
+        self.OKbutton = customtkinter.CTkButton(self.checkoutDialog, text="OK", command=self.completeSale)
+        
+        self.amountReceivedLabel.grid(row=0, column=1, sticky='e')
+        self.amountReceivedEntry.grid(row=0, column=2, sticky='e')
+        self.totalBillLabel.grid(row=2, column=1, sticky='e')
+        self.totalBillDisplay.grid(row=2, column=2, sticky='e')
+        self.customerChangelabel.grid(row=4, column=1, sticky='e')
+        self.customerChangeDisplay.grid(row=4, column=2, sticky='e')
+        self.OKbutton.grid(row=6, columnspan=3, sticky='ew')    
+
+        self.amountReceivedEntry.bind('<Return>', command=self.giveChange)
+
+
+
+
+  
     def addToCart(self, *args):   
         self.processQuantityChange()
+        self.saleRecord.append([self.productNumberStringVar.get(), self.productDescriptionStringVar.get(), self.quantityStringVar.get(), self.salePricerDoubleVar.get(), self.subTotalDoubleVar.get()])
         self.basket.append([self.productDescriptionStringVar.get(), self.quantityStringVar.get(), self.salePricerDoubleVar.get(), self.subTotalDoubleVar.get()])
         self.totalDoubleVar.set(self.totalDoubleVar.get() + self.subTotalDoubleVar.get())
+        tabulatedData = tabulate(self.basket, headers=["Item Desc", "Qty", "Price", "Sub Total"])
+        numberOfRows = len(self.basket) + 7
+        self.customerReceipt.configure(height=numberOfRows)
+        self.customerReceipt.delete("0.0", tkinter.END)
+        self.customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
+        self.customerReceipt.insert("end", f"{time.asctime(time.localtime(time.time()))}\n\n")
+        self.customerReceipt.insert("end", tabulatedData)
+        totalLine = self.lineWidth - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
+        self.customerReceipt.insert("end", "\n\n")
+        self.customerReceipt.insert("end", f"TOTAL{' '*totalLine}{self.totalDoubleVar.get()}")        
+        self.customerReceipt.place(x=1150, y=100)
 
-        headerLine = tabulate(self.basket, headers=["Item Desc", "Qty", "Price", "Sub Total"])
-        lineLength = len(self.productDescriptionStringVar.get()) + len(self.quantityStringVar.get()) + len(str(self.salePricerDoubleVar.get())) + len(str(self.subTotalDoubleVar.get())) + 20
-        heightLength = len(self.basket) + 7
-        if(lineLength > self.lineLength):
-            self.lineLength = lineLength
-            customerReceipt = tkinter.Text(self.parent, width=self.lineLength, height=heightLength)
-        else:
-            customerReceipt = tkinter.Text(self.parent, width=self.lineLength)  
-        customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
-        customerReceipt.insert("end", f"{time.asctime(time.localtime(time.time()))}\n\n")
-        customerReceipt.insert("end", headerLine)
-        totalLine = self.lineLength - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
-        customerReceipt.insert("end", "\n\n")
-        customerReceipt.insert("end", f"TOTAL{' '*totalLine}{self.totalDoubleVar.get()}")
-        
-        customerReceipt.place(x=1150, y=100)
+
 
     def processQuantityChange(self, *args):
         self.subTotalDoubleVar.set(self.salePricerDoubleVar.get()*int(self.quantityStringVar.get()))           
@@ -77,19 +192,18 @@ class SellProducts:
 
     def productDescriptionSearch(self, *args):
         self.record = (self.productDescriptionStringVar.get(),)
-        print(self.record[0])
         try:
             dbcursor.execute(f"SELECT productNumber, productName, productDescription, salePrice FROM products WHERE productName like '%{self.record[0]}%' OR  productDescription like '%{self.record[0]}%'")
             database.commit()
             rows = dbcursor.fetchall()
             if (rows):
                 columnNames = ("productNumber", "productDescription", "salePrice")
-                treeView = ttk.Treeview(self.parent, columns=columnNames)
+                treeView = ttk.Treeview(self.parent, columns=columnNames, height=10)
                 myStyle=ttk.Style()
                 myStyle.configure(".", font=("Helvetica", 12))
                 myStyle.configure("Treeview", font=("Helvetica", 12))
-                myStyle.configure("Treeview.Heading", font=("Helvetica", 15), background="blue")
-
+                myStyle.configure("Treeview.Heading", font=("Helvetica", 15), background="blue", foreground="blue" )
+                treeView.column("#0", width=0)
                 treeView.heading("#0", text="")
                 treeView.heading("productNumber", text="Product #", anchor="w")
                 treeView.heading("productDescription", text="Description", anchor="w")
@@ -97,16 +211,17 @@ class SellProducts:
 
                 for row in rows:
                     treeView.insert(parent='', index=tkinter.END, values=(row[0], row[2], row[3]))
-                
-                # treeView.bind("<<TreeviewSelect>>", self.itemSelected)
-                treeView.bind("<<TreeviewSelect>>", lambda *args : self.selectedRow(treeView))
 
-                # treeView.pack()
+                treeView.bind("<<TreeviewSelect>>", lambda *args : self.selectedRow(treeView, yscrollbar))
                 treeView.place(x=40, y=170)
-        except Exception as e:
-            print("Error in fetching in the database: ", e)
+                yscrollbar = tkinter.Scrollbar(self.parent, orient='vertical', command=treeView.yview)
+                treeView.configure(yscrollcommand=yscrollbar.set)
+                yscrollbar.place(x=640, y=170, height=225)
 
-    def selectedRow(self, tree):
+        except Exception as e:
+            print("Error: ", e)
+
+    def selectedRow(self, tree, scrollbar):
         record = (tree.item(tree.selection()))['values']
         self.productNumberStringVar.set(record[0])
         self.productDescriptionStringVar.set(record[1])
@@ -114,6 +229,7 @@ class SellProducts:
         self.salePricerDoubleVar.set(record[2])
         self.processQuantityChange()
         tree.destroy()
+        scrollbar.destroy()
 
 
     def productNumberSearch(self, *args):
@@ -132,9 +248,7 @@ class SellProducts:
             print("Error: ", e)     
 
 
-
- 
-class Products(customtkinter.CTkToplevel):
+class ProductNew(customtkinter.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.geometry("300x375")
@@ -172,15 +286,60 @@ class Products(customtkinter.CTkToplevel):
         if(self.productNumber and self.productName and self.productDescription and self.units 
            and self.location and self.costPrice and self.salePrice): 
             self.record = (self.productNumber, self.productName, self.productDescription, self.units, self.location, self.costPrice, self.salePrice)       
-            # database = sqlite3.connect("JWdatabase.db")
-            # dbcursor = database.cursor()
             try:
                 dbcursor.execute("""INSERT INTO products 
                 (productNumber, productName, productDescription, units, location, costPrice, salePrice) 
                 VALUES (?,?,?,?,?,?,?)""",  self.record)
                 database.commit()
-            except:
-                self.lblMessage.configure(text="Error posting into database")
+            except Exception as e:
+                self.lblMessage.configure(text=f"Error: {e}")      
+        else:
+            self.lblMessage.configure(text="All fields must be entered")
+
+
+class ProductExisting(customtkinter.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.geometry("300x375")
+        self.title("Products Entry")
+
+        self.productNumberEntry = customtkinter.CTkEntry(self, placeholder_text="Enter product number", width=200)
+        self.productNameEntry = customtkinter.CTkEntry(master=self, placeholder_text="Enter product name", width=200, state="disabled")
+        self.productDescriptionEntry = customtkinter.CTkEntry(master=self, placeholder_text="Enter a description", width=200, state="disabled")
+        self.unitsEntry = customtkinter.CTkEntry(master=self, placeholder_text="Quantity of this unit", width=200)
+        self.locationEntry = customtkinter.CTkEntry(master=self, placeholder_text="Location kept", width=200, state="disabled")
+        self.costPriceEntry = customtkinter.CTkEntry(master=self, placeholder_text="Cost price", width=200)
+        self.salePriceEntry = customtkinter.CTkEntry(master=self, placeholder_text="Sale price", width=200)
+        self.postProductButton = customtkinter.CTkButton(self, text="Update product", width=200, command=self.validate)
+        self.lblMessage = customtkinter.CTkLabel(self, width=200, text="", text_color="red")
+        
+        self.productNumberEntry.place(x=50, y=30)
+        self.productNameEntry.place(x=50, y=65)
+        self.productDescriptionEntry.place(x=50, y=100)
+        self.unitsEntry.place(x=50, y=135)    
+        self.locationEntry.place(x=50, y=170)
+        self.costPriceEntry.place(x=50, y=205)
+        self.salePriceEntry.place(x=50, y=240)
+        self.postProductButton.place(x=50, y=275)
+        self.lblMessage.place(x=50, y=345)
+
+    def validate(self):
+        self.productNumber = self.productNumberEntry.get()
+        self.productName = self.productNameEntry.get()
+        self.productDescription	= self.productDescriptionEntry.get()
+        self.units = self.unitsEntry.get()
+        self.location = self.locationEntry.get()
+        self.costPrice = self.costPriceEntry.get()
+        self.salePrice = self.salePriceEntry.get()     
+
+        if(self.productNumber and self.units and self.costPrice and self.salePrice): 
+            self.record = (self.units, self.costPrice, self.salePrice, self.productNumber)       
+            try:
+                #increase quantity in products table
+                dbcursor.execute("UPDATE products SET units = units + ?, costPrice = ?, salePrice = ? WHERE productNumber = ?", self.record)
+                database.commit()
+            except Exception as e:
+                self.lblMessage.configure(text=f"Error: {e}")           
         else:
             self.lblMessage.configure(text="All fields must be entered")
 
@@ -214,8 +373,7 @@ class AdminWindow(customtkinter.CTkToplevel):
         self.lblMessage.place(x=10, y=363)
 
 
-    def addUser(self):
-               
+    def addUser(self):               
         self.firstname =  self.firstnameEntry.get()
         self.lastname = self.lastnameEntry.get()
         self.username = self.usernameEntry.get()
@@ -297,6 +455,7 @@ class LogInWindow(customtkinter.CTkToplevel):
         self.loginAlternativeLabel.place(x=10, y=180)    
         self.loginGoogleButton.place(x=50, y=255)
         self.loginFacebookButton.place(x=50, y=290)
+        self.lblMessage.place(x=30, y=325)
 
     def validate(self):
         self.username = self.usernameEntry.get()
@@ -305,17 +464,17 @@ class LogInWindow(customtkinter.CTkToplevel):
             try:
                 self.password = hashlib.sha256(self.password.encode()).hexdigest()
                 self.record = (self.username, self.password)
-                # database = sqlite3.connect("JWdatabase.db")
-                # dbcursor = database.cursor()
                 dbcursor.execute("SELECT * FROM users WHERE userName = ? AND password = ?", self.record)
                 database.commit()
                 if (dbcursor.fetchall()):
                     self.destroy()
-                    sellproducts = SellProducts(self.parent, self.username)               
-            except:
+                    sellproducts = SellProducts(self.parent, self.username)  
+                else:             
                     self.lblMessage.configure(text="Wrong credentials or user does not exist")
+            except Exception as e:
+                    self.lblMessage.configure(text=f"Error: {e}")
         else:
-            self.lblMessage.configure(text="Both username and password fields must be entered")
+            self.lblMessage.configure(text="Enter both username and password fields")
 
     def logInGoogleUser(self):
         pass
@@ -334,6 +493,7 @@ class MenuBar:
         self.menubar.add_cascade(label="Options", font=("",13),  menu=self.optionsMenu)
         self.optionsMenu.add_command(label="Log In", font=("",13), command= lambda : self.logIn(self.parent))
         self.optionsMenu.add_command(label="Input Products", font=("",13), command= lambda : self.inputProducts(self.parent))
+        self.optionsMenu.add_command(label="Update Products", font=("",13), command= lambda : self.updateProducts(self.parent))
         self.optionsMenu.add_command(label="Inventory", font=("",13), command=self.inventoryReport)
         self.optionsMenu.add_command(label="User Administration", font=("",13), command=lambda : self.userAdministration(self.parent))
 
@@ -342,7 +502,11 @@ class MenuBar:
         self.login = LogInWindow(parent)   
 
     def inputProducts(self, parent):
-        self.login = Products(parent) 
+        self.login = ProductNew(parent) 
+
+
+    def updateProducts(self, parent):
+        self.login = ProductExisting(parent) 
 
     def inventoryReport(self):
         print("implement Inventory report")
@@ -350,5 +514,3 @@ class MenuBar:
     def userAdministration(self, parent):
         self.login= AdminWindow(parent)
 
-
-  
