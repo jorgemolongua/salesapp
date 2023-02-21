@@ -4,10 +4,10 @@ import hashlib
 import sqlite3
 from tkinter import ttk
 from tabulate import tabulate
-import time
+from datetime import datetime
 import os
 import tempfile
-import interface
+import tkcalendar
 
 
 width = 1400
@@ -117,7 +117,7 @@ class SellProducts:
         self.customerReceipt.destroy()
         self.customerReceipt = tkinter.Text(self.parent, width=self.lineWidth, height=numberOfRows)
         self.customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
-        self.presentTime = time.asctime(time.localtime(time.time()))
+        self.presentTime = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         self.customerReceipt.insert("end", f"{self.presentTime}\n\n")
         self.customerReceipt.insert("end", tabulatedData)
         totalLine = self.lineWidth - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
@@ -177,7 +177,7 @@ class SellProducts:
         self.customerReceipt.configure(height=numberOfRows)
         self.customerReceipt.delete("0.0", tkinter.END)
         self.customerReceipt.insert("0.0", f"Cashier: {self.cashier}\n")
-        self.customerReceipt.insert("end", f"{time.asctime(time.localtime(time.time()))}\n\n")
+        self.customerReceipt.insert("end", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "\n\n")
         self.customerReceipt.insert("end", tabulatedData)
         totalLine = self.lineWidth - len("TOTAL") - len(str(self.subTotalDoubleVar.get())) - 4
         self.customerReceipt.insert("end", "\n\n")
@@ -492,10 +492,15 @@ class MenuBar:
         self.optionsMenu = tkinter.Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(label="Options", font=("",13),  menu=self.optionsMenu)
         self.optionsMenu.add_command(label="Log In", font=("",13), command= lambda : self.logIn(self.parent))
-        self.optionsMenu.add_command(label="Input Products", font=("",13), command= lambda : self.inputProducts(self.parent))
-        self.optionsMenu.add_command(label="Update Products", font=("",13), command= lambda : self.updateProducts(self.parent))
-        self.optionsMenu.add_command(label="Inventory", font=("",13), command=self.inventoryReport)
+        self.productsMenu = tkinter.Menu(self.menubar, tearoff=0)
+        self.optionsMenu.add_cascade(label="Products", font=("",13), menu=self.productsMenu)
+        self.productsMenu.add_command(label="Input Products", font=("",13), command= lambda : self.inputProducts(self.parent))
+        self.productsMenu.add_command(label="Update Products", font=("",13), command= lambda : self.updateProducts(self.parent))
         self.optionsMenu.add_command(label="User Administration", font=("",13), command=lambda : self.userAdministration(self.parent))
+        self.inventoryMenu = tkinter.Menu(self.menubar, tearoff=0)
+        self.optionsMenu.add_cascade(label="Inventory", font=("",13), menu=self.inventoryMenu)
+        self.inventoryMenu.add_command(label="Current Inventory", font=("",13), command=self.inventoryReport)
+        self.inventoryMenu.add_command(label="Sales Between Dates", font=("",13), command=self.salesReport)
 
 
     def logIn(self, parent):
@@ -509,8 +514,86 @@ class MenuBar:
         self.login = ProductExisting(parent) 
 
     def inventoryReport(self):
-        print("implement Inventory report")
+        try:
+            dbcursor.execute("SELECT productNumber, ProductName, ProductDescription, units, costPrice, salePrice FROM products ")
+            database.commit()
+            rows = dbcursor.fetchall()
+            if (rows):
+                tabulatedData = tabulate(rows, headers=["Product Number", "Product Name", "Description", "Units", "Cost Price", "Sale Price"])
+                print(tabulatedData)  
+
+                tmpfile = tempfile.mktemp('.txt')
+                open(tmpfile, "w").write(tabulatedData)
+                os.startfile(tmpfile, "print")             
+            else:             
+                print("No results returned")
+        except Exception as e:
+                print(f"Error: {e}")
+
+    
+    def getStartDates(self, cal, button, entry1, entry2):
+        if(button=="date1"):
+            entry1.delete(0, customtkinter.END)
+            entry1.insert(0, cal.get_date())
+
+        elif(button=="date2"):
+            entry2.delete(0, customtkinter.END)
+            entry2.insert(0, cal.get_date())
+
+    def getDates(self):
+        startDate = self.startDateEntry.get() + " 01:01:01"
+        endDate = self.endDateEntry.get() + " 23:59:59"
+
+        record = (startDate, endDate)
+        print(record)
+        try:
+            dbcursor.execute("SELECT date, sales.productNumber, productName, productDescription, sales.units, costPrice, sales.salePrice, user FROM sales INNER JOIN products ON sales.productNumber = products.productNumber WHERE date >= ? and date <= ?", record)
+            database.commit()
+            rows = dbcursor.fetchall()
+            if (rows):
+                tabulatedData = tabulate(rows, headers=["Date", "Product Number", "Product Name", "Description", "Units", "Cost Price", "Sale Price", "Cashier"])
+                print(tabulatedData)  
+
+                tmpfile = tempfile.mktemp('.txt')
+                open(tmpfile, "w").write(tabulatedData)
+                os.startfile(tmpfile, "print")
+            
+            else:             
+                print("No results returned")
+        except Exception as e:
+                print(f"Error: {e}")
+
+    def salesReport(self, *args):    
+        self.calendarWindow = customtkinter.CTkToplevel()
+        self.calendarWindow.title("Sales")
+        calendarWindowOffsetX, calendarWindowOffsetY = self.parent.winfo_x(), self.parent.winfo_y()
+        padx=600
+        pady=0 
+        today = datetime.now()
+        dy, mth, yr = today.day, today.month, today.year
+        self.calendarWindow.geometry(f"350x240+{calendarWindowOffsetX + padx}+{calendarWindowOffsetY + pady}")
+
+        self.cal = tkcalendar.Calendar(self.calendarWindow, selectmode="day",  date_pattern="dd/MM/yyyy") 
+        self.startDateLabel = customtkinter.CTkLabel(self.calendarWindow, text="Start Date: ")
+        self.startDateEntry = customtkinter.CTkEntry(self.calendarWindow)  
+        self.startButton = customtkinter.CTkButton(self.calendarWindow, text="Select", command=lambda: self.getStartDates(self.cal, "date1", self.startDateEntry, self.endDateEntry))
+        self.endDateLabel = customtkinter.CTkLabel(self.calendarWindow, text="End Date: ")
+        self.endDateEntry = customtkinter.CTkEntry(self.calendarWindow)
+        self.endButton = customtkinter.CTkButton(self.calendarWindow, text="Select", command=lambda: self.getStartDates(self.cal, "date2", self.startDateEntry, self.endDateEntry))
+
+        self.OKbutton = customtkinter.CTkButton(self.calendarWindow, text="Post", command=self.getDates)
+        
+        self.cal.grid(row=1, columnspan=6, sticky='ew') 
+        self.startDateLabel.grid(row=6, column=2, sticky='e')
+        self.startDateEntry.grid(row=6, column=3, sticky='e')
+        self.startButton.grid(row=6, column=4)
+        self.endDateLabel.grid(row=8, column=2, sticky='e')
+        self.endDateEntry.grid(row=8, column=3, sticky='e')
+        self.endButton.grid(row=8, column=4)
+        self.OKbutton.grid(row=10, column=3, columnspan=4)    
+
 
     def userAdministration(self, parent):
         self.login= AdminWindow(parent)
 
+  
