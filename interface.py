@@ -2,18 +2,19 @@ import tkinter
 import customtkinter
 from classes import *
 
-width = 1400  
+width = 1200  
 height = 700
 
 customtkinter.set_default_color_theme("blue")
 currentUser=""
-
+  
 
 class MainWindow(customtkinter.CTk):
     def __init__(self):
         super().__init__()
-    
-        self.geometry(f"{width}x{height}")
+        x, y = (self.winfo_screenwidth()-width)/2, (self.winfo_screenheight() - height)/2
+
+        self.geometry(f"{width}x{height}+{x}+{y}")
         self.title("JWealth5")
            
         self.lblFont = customtkinter.CTkFont(family="Pacifico", size=72)

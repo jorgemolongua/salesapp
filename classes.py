@@ -131,8 +131,6 @@ class SellProducts:
         self.customerChangeDisplay.configure(text=str(customerChange))
 
 
-
-     
     def processPayment(self, *args): 
         self.checkoutDialog = customtkinter.CTkToplevel()
         self.checkoutDialog.title("Checkout")
@@ -162,9 +160,6 @@ class SellProducts:
         self.OKbutton.grid(row=6, columnspan=3, sticky='ew')    
 
         self.amountReceivedEntry.bind('<Return>', command=self.giveChange)
-
-
-
 
   
     def addToCart(self, *args):   
@@ -524,7 +519,7 @@ class MenuBar:
 
                 tmpfile = tempfile.mktemp('.txt')
                 open(tmpfile, "w").write(tabulatedData)
-                os.startfile(tmpfile, "print")             
+                os.startfile(tmpfile, "edit")             
             else:             
                 print("No results returned")
         except Exception as e:
@@ -535,7 +530,7 @@ class MenuBar:
         if(button=="date1"):
             entry1.delete(0, customtkinter.END)
             entry1.insert(0, cal.get_date())
-
+  
         elif(button=="date2"):
             entry2.delete(0, customtkinter.END)
             entry2.insert(0, cal.get_date())
@@ -556,23 +551,16 @@ class MenuBar:
 
                 tmpfile = tempfile.mktemp('.txt')
                 open(tmpfile, "w").write(tabulatedData)
-                os.startfile(tmpfile, "print")
+                os.startfile(tmpfile, "edit")
             
             else:             
                 print("No results returned")
         except Exception as e:
                 print(f"Error: {e}")
 
-    def salesReport(self, *args):    
-        self.calendarWindow = customtkinter.CTkToplevel()
+    def salesReport(self, *args):
+        self.calendarWindow = customtkinter.CTkToplevel(self.parent)
         self.calendarWindow.title("Sales")
-        calendarWindowOffsetX, calendarWindowOffsetY = self.parent.winfo_x(), self.parent.winfo_y()
-        padx=600
-        pady=0 
-        today = datetime.now()
-        dy, mth, yr = today.day, today.month, today.year
-        self.calendarWindow.geometry(f"350x240+{calendarWindowOffsetX + padx}+{calendarWindowOffsetY + pady}")
-
         self.cal = tkcalendar.Calendar(self.calendarWindow, selectmode="day",  date_pattern="dd/MM/yyyy") 
         self.startDateLabel = customtkinter.CTkLabel(self.calendarWindow, text="Start Date: ")
         self.startDateEntry = customtkinter.CTkEntry(self.calendarWindow)  
@@ -580,8 +568,7 @@ class MenuBar:
         self.endDateLabel = customtkinter.CTkLabel(self.calendarWindow, text="End Date: ")
         self.endDateEntry = customtkinter.CTkEntry(self.calendarWindow)
         self.endButton = customtkinter.CTkButton(self.calendarWindow, text="Select", command=lambda: self.getStartDates(self.cal, "date2", self.startDateEntry, self.endDateEntry))
-
-        self.OKbutton = customtkinter.CTkButton(self.calendarWindow, text="Post", command=self.getDates)
+        self.OKbutton = customtkinter.CTkButton(self.calendarWindow, text="Post", fg_color="green", hover_color="green", command=self.getDates)
         
         self.cal.grid(row=1, columnspan=6, sticky='ew') 
         self.startDateLabel.grid(row=6, column=2, sticky='e')
@@ -590,7 +577,7 @@ class MenuBar:
         self.endDateLabel.grid(row=8, column=2, sticky='e')
         self.endDateEntry.grid(row=8, column=3, sticky='e')
         self.endButton.grid(row=8, column=4)
-        self.OKbutton.grid(row=10, column=3, columnspan=4)    
+        self.OKbutton.grid(row=10, columnspan=6, sticky='ew')    
 
 
     def userAdministration(self, parent):
