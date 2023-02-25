@@ -7,7 +7,7 @@ height = 700
 
 customtkinter.set_default_color_theme("blue")
 currentUser=""
-  
+
 
 class MainWindow(customtkinter.CTk):
     def __init__(self):

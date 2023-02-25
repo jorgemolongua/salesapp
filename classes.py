@@ -8,6 +8,8 @@ from datetime import datetime
 import os
 import tempfile
 import tkcalendar
+import platform
+import subprocess
 
 
 width = 1400
@@ -88,7 +90,13 @@ class SellProducts:
         #print file
         tmpfile = tempfile.mktemp('.txt')
         open(tmpfile, "w").write(self.customerReceipt.get("0.0", tkinter.END))
-        os.startfile(tmpfile, "print")
+
+        if platform.system() == "Windows":
+            os.startfile(tmpfile, "edit")  
+        else:
+            opener = "open" if platform.system() == "darwin" else "xdg-open"
+            subprocess.call([opener, tmpfile])
+
 
         # #close change dialog box and receipt
         self.checkoutDialog.destroy()
@@ -485,17 +493,17 @@ class MenuBar:
         self.menubar = tkinter.Menu(self.parent)
         parent.config(menu=self.menubar)
         self.optionsMenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="Options", font=("",13),  menu=self.optionsMenu)
-        self.optionsMenu.add_command(label="Log In", font=("",13), command= lambda : self.logIn(self.parent))
+        self.menubar.add_cascade(label="Options", font=("",10),  menu=self.optionsMenu)
+        self.optionsMenu.add_command(label="Log In", font=("",10), command= lambda : self.logIn(self.parent))
         self.productsMenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.optionsMenu.add_cascade(label="Products", font=("",13), menu=self.productsMenu)
-        self.productsMenu.add_command(label="Input Products", font=("",13), command= lambda : self.inputProducts(self.parent))
-        self.productsMenu.add_command(label="Update Products", font=("",13), command= lambda : self.updateProducts(self.parent))
-        self.optionsMenu.add_command(label="User Administration", font=("",13), command=lambda : self.userAdministration(self.parent))
+        self.optionsMenu.add_cascade(label="Products", font=("",10), menu=self.productsMenu)
+        self.productsMenu.add_command(label="Input Products", font=("",10), command= lambda : self.inputProducts(self.parent))
+        self.productsMenu.add_command(label="Update Products", font=("",10), command= lambda : self.updateProducts(self.parent))
+        self.optionsMenu.add_command(label="User Administration", font=("",10), command=lambda : self.userAdministration(self.parent))
         self.inventoryMenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.optionsMenu.add_cascade(label="Inventory", font=("",13), menu=self.inventoryMenu)
-        self.inventoryMenu.add_command(label="Current Inventory", font=("",13), command=self.inventoryReport)
-        self.inventoryMenu.add_command(label="Sales Between Dates", font=("",13), command=self.salesReport)
+        self.optionsMenu.add_cascade(label="Inventory", font=("",10), menu=self.inventoryMenu)
+        self.inventoryMenu.add_command(label="Current Inventory", font=("",10), command=self.inventoryReport)
+        self.inventoryMenu.add_command(label="Sales Between Dates", font=("",10), command=self.salesReport)
 
 
     def logIn(self, parent):
@@ -515,11 +523,15 @@ class MenuBar:
             rows = dbcursor.fetchall()
             if (rows):
                 tabulatedData = tabulate(rows, headers=["Product Number", "Product Name", "Description", "Units", "Cost Price", "Sale Price"])
-                print(tabulatedData)  
 
                 tmpfile = tempfile.mktemp('.txt')
                 open(tmpfile, "w").write(tabulatedData)
-                os.startfile(tmpfile, "edit")             
+
+                if platform.system() == "Windows":
+                    os.startfile(tmpfile, "edit")  
+                else:
+                    opener = "open" if platform.system() == "darwin" else "xdg-open"
+                    subprocess.call([opener, tmpfile])
             else:             
                 print("No results returned")
         except Exception as e:
@@ -540,19 +552,21 @@ class MenuBar:
         endDate = self.endDateEntry.get() + " 23:59:59"
 
         record = (startDate, endDate)
-        print(record)
         try:
             dbcursor.execute("SELECT date, sales.productNumber, productName, productDescription, sales.units, costPrice, sales.salePrice, user FROM sales INNER JOIN products ON sales.productNumber = products.productNumber WHERE date >= ? and date <= ?", record)
             database.commit()
             rows = dbcursor.fetchall()
             if (rows):
                 tabulatedData = tabulate(rows, headers=["Date", "Product Number", "Product Name", "Description", "Units", "Cost Price", "Sale Price", "Cashier"])
-                print(tabulatedData)  
 
                 tmpfile = tempfile.mktemp('.txt')
                 open(tmpfile, "w").write(tabulatedData)
-                os.startfile(tmpfile, "edit")
-            
+
+                if platform.system() == "Windows":
+                    os.startfile(tmpfile, "edit")  
+                else:
+                    opener = "open" if platform.system() == "darwin" else "xdg-open"
+                    subprocess.call([opener, tmpfile])
             else:             
                 print("No results returned")
         except Exception as e:
